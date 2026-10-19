@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "git-polite-nightly": {
+      "command": "cargo",
+      "args": ["run", "--quiet", "--release", "--", "mcp"]
+    },
+    "git-polite-nightly-structured": {
+      "command": "cargo",
+      "args": ["run", "--quiet", "--release", "--", "mcp", "--structured-output"]
+    }
+  }
+}

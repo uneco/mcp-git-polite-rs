@@ -1,0 +1,145 @@
+[
+  {
+    "name": "list_changes",
+    "description": "View unstaged git changes with line-level selection numbers for partial staging.\n\nPREFER THIS OVER `git diff` when you need to selectively stage changes. Unlike `git diff`,\nthis tool includes untracked files (newly created files) in the output. This tool numbers\neach changed line (0001, 0002, etc.) so you can stage specific lines or ranges instead of\nentire files. Essential for creating multiple logical commits from intermixed changes.\n\nKey features:\n- Includes untracked files (status: \"added\") as well as modified files (status: \"modified\")\n- Numbers every changed line for precise selection\n- Supports byte-based pagination to protect LLM context\n- Auto-truncates large diffs (>10KB) with clear indication\n\nHandling truncated files:\nWhen a file shows `truncated: true` with empty `lines: []`, use the `diff` tool to view\nits complete content. The `diff` tool returns the same numbered line format needed for\npartial staging with `apply_changes`, whereas `git diff` output lacks line numbers and\ncannot be used for selective staging. For example, if a large refactored file is truncated,\ncall `diff(path=\"src/large_module.py\")` to see the full numbered diff and selectively stage\nrelated changes.\n\nUse cases:\n- Breaking up large changes into multiple focused commits\n- Staging only specific changes while keeping others unstaged\n- Creating atomic commits from work-in-progress code\n- Separating refactoring from feature changes\n- Selectively staging parts of newly created files\n\nAfter viewing changes, use apply_changes with the line numbers to stage selected changes.",
+    "inputSchema": {
+      "properties": {
+        "paths": {
+          "default": [],
+          "description": "Optional list of file paths to filter (default: all files)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "page_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Opaque pagination token from previous response"
+        },
+        "page_size_files": {
+          "default": 50,
+          "description": "Max files per page - safety limit",
+          "type": "integer"
+        },
+        "page_size_bytes": {
+          "default": 30720,
+          "description": "Max bytes per page - primary limit",
+          "type": "integer"
+        },
+        "unified": {
+          "default": 20,
+          "description": "Context lines around changes",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "diff",
+    "description": "View complete diff for a single file without truncation.\n\nThis tool is designed for viewing the full diff of a single file, regardless of size.\nUnlike list_changes, this tool will NEVER truncate the output, making it suitable\nfor reviewing large files like lock files or generated code.\n\nUse this when you need to:\n- View the complete diff of a large file (e.g., uv.lock, package-lock.json)\n- Review all changes in a specific file before staging\n- Analyze files that would be truncated by list_changes",
+    "inputSchema": {
+      "properties": {
+        "path": {
+          "description": "File path to view diff for",
+          "type": "string"
+        },
+        "unified": {
+          "default": 20,
+          "description": "Context lines around changes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "apply_changes",
+    "description": "Stage selected lines to git index for partial commits (alternative to `git add -p`).\n\nAfter using list_changes to view numbered changes, use this tool to selectively stage\nspecific lines or ranges to the git index. This enables creating multiple logical commits\nfrom a single file with intermixed changes.\n\nUnlike `git add`, this tool can stage parts of untracked files (newly created files).\nYou can commit only the first 10 lines of a new file while keeping the rest unstaged.\n\nNumber format examples:\n- Single lines: \"0001,0002,0005\"\n- Ranges: \"0001-0010\"\n- Combined: \"0001-0005,0020-0025\"\n\nThe tool updates the git index directly and reports remaining unstaged changes, allowing\niterative staging for multiple commits from the same file.",
+    "inputSchema": {
+      "properties": {
+        "path": {
+          "description": "File path to apply changes to",
+          "type": "string"
+        },
+        "lines": {
+          "description": "Change numbers in format: NNNN,MMMM,PPPP-QQQQ",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "lines"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "auto_commit",
+    "description": "Start a guided session to organize and commit all unstaged changes with appropriate granularity.\n\nThis tool helps you organize your changes and create multiple focused commits by:\n1. Showing recent commit messages as style reference\n2. Displaying summary statistics of all unstaged changes (file counts, line counts)\n3. Providing step-by-step instructions for the commit workflow\n\nThis tool uses progressive disclosure: it shows only statistics (additions/deletions per file)\nto avoid token limits. Use list_changes or diff tools to view detailed changes for specific files.\n\nUse this when you have multiple logical changes mixed together and want to organize them\ninto separate, well-structured commits.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "unstack",
+    "description": "Unstack linear commits into parallel branches for separate PRs.\n\nThis tool transforms a linear commit history (A -> B -> C -> D) into parallel\nbranches (A -> B, A -> C, A -> D) where each branch contains specific commits\ncherry-picked from the original history.\n\nUse this when you've made multiple changes in sequence but want to create\nseparate PRs for different logical changes. Each branch can be independently\nreviewed and merged.\n\nExample scenario:\nYou have commits: fix-bug -> add-feature -> update-docs\nYou want separate PRs, so you create:\n- feat/999: [fix-bug, update-docs]\n- feat/1000: [add-feature]\n\nThis creates two branches from origin/main:\n- feat/999 with fix-bug and update-docs cherry-picked in order\n- feat/1000 with add-feature cherry-picked\n\nNote:\n    - Existing branches with the same name will cause an error\n    - The current branch is not changed by this operation\n    - Uses low-level git commands (commit-tree, update-ref) to avoid changing working directory",
+    "inputSchema": {
+      "properties": {
+        "branches": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": "Dictionary mapping branch names to lists of commit references. Commits can be specified as SHA, branch names, or symbolic refs (e.g., HEAD~2). Commits are cherry-picked in the order specified.",
+          "type": "object"
+        },
+        "parent": {
+          "default": "origin/main",
+          "description": "Base commit to branch from. All branches will start from this commit.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branches"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
+  }
+]

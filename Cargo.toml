@@ -1,0 +1,22 @@
+[package]
+name = "git-polite"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Git line-level staging via MCP - stage individual changes and partial untracked files with precision"
+license = "MIT"
+repository = "https://github.com/uneco/mcp-git-polite-rs"
+keywords = ["git", "mcp", "staging", "diff"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+base64 = "0.23.1"
+rmcp = { version = "3.5.1", default-features = false, features = ["server", "transport-io"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+tokio = { version = "1.53.3", default-features = false, features = ["rt", "io-std"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
